@@ -3,7 +3,7 @@
 Kinitro incentivizes the emergence of agents that can conquer various tasks across different environments. Miners publish agents to compete, validators peform rollouts and evaluate the agents, and reward miners based on the results. All this happens in real-time and can easily be viewed by anyone through our [dashboard](https://kinitro.ai/dashboard).
 
 For a visual overview of how these pieces interact, see the [architecture introduction](docs/architecture/introduction.md).
-
+ 
 ## Repository Setup
 
 1. **Clone the repository**
