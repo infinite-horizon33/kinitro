@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: 
+spec:
+  # runtimeClassName: runc
+  restartPolicy: Never
+  initContainers:
+  - name: fetch-submission
+    image: ghcr.io/threetau/kinitro-miner-agent:latest
+    imagePullPolicy: IfNotPresent
+    env:
+      - name: SUBMISSION_ARCHIVE_URL
+        value: ""
+      - name: SUBMISSION_ARCHIVE_SHA256
+        value: ""
+    command:
+      - sh
+      - -c
+      - |
+        set -euo pipefail
+        mkdir -p /workspace/submission
+        if [ -z "${SUBMISSION_ARCHIVE_URL:-}" ]; then
+          echo "SUBMISSION_ARCHIVE_URL is not set" >&2
+          exit 1
+        fi
+        echo "Downloading submission archive from $SUBMISSION_ARCHIVE_URL"
+        curl -L --fail "$SUBMISSION_ARCHIVE_URL" -o /tmp/submission.tar.gz
+        if [ -n "${SUBMISSION_ARCHIVE_SHA256:-}" ]; then
+          echo "$SUBMISSION_ARCHIVE_SHA256  /tmp/submission.tar.gz" | sha256sum -c -
+        fi
+        tar -xzf /tmp/submission.tar.gz -C /workspace/submission
+        # Provide evaluator templates only when the submission is missing a file
+        for template in /templates/*; do
+          name=$(basename "$template")
+          dest="/workspace/submission/$name"
+          if [ ! -e "$dest" ]; then
+            cp "$template" "$dest"
+          fi
+        done
+        # Create an isolated virtual environment for the submission
+        python -m venv /workspace/submission/.venv
+        # Upgrade pip + wheel inside the venv to improve wheels resolution
+        /workspace/submission/.venv/bin/python -m pip install --upgrade pip wheel setuptools
+        # Install miner-specified dependencies
+        if [ -f /workspace/submission/requirements.txt ]; then
+          echo "Installing dependencies from requirements.txt into venv"
+          /workspace/submission/.venv/bin/pip install --no-cache-dir -r /workspace/submission/requirements.txt
+        elif [ -f /workspace/submission/pyproject.toml ]; then
+          echo "Installing submission as a project (pyproject.toml detected)"
+          /workspace/submission/.venv/bin/pip install --no-cache-dir /workspace/submission
+        else
+          echo "No requirements.txt or pyproject.toml found; proceeding without extra deps"
+        fi
+    volumeMounts:
+      - name: workspace
+        mountPath: /workspace/submission
+  - name: restrict-egress
+    image: ghcr.io/threetau/kinitro-miner-agent:latest
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      runAsUser: 0
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - NET_ADMIN
+        drop:
+          - NET_RAW
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "Configuring firewall to block outbound internet access"
+        iptables -F OUTPUT
+        iptables -P OUTPUT DROP
+        iptables -A OUTPUT -o lo -j ACCEPT
+        iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+        iptables -A OUTPUT -m conntrack --ctstate NEW -d 10.0.0.0/8 -j ACCEPT
+        iptables -A OUTPUT -m conntrack --ctstate NEW -d 172.16.0.0/12 -j ACCEPT
+        iptables -A OUTPUT -m conntrack --ctstate NEW -d 192.168.0.0/16 -j ACCEPT
+        if command -v ip6tables >/dev/null 2>&1; then
+          ip6tables -F OUTPUT || true
+          ip6tables -P OUTPUT DROP || true
+          ip6tables -A OUTPUT -o lo -j ACCEPT || true
+          ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT || true
+        fi
+        echo "Final IPv4 OUTPUT rules:"
+        iptables -S OUTPUT || true
+  containers:
+  - name: runner
+    image: ghcr.io/threetau/kinitro-miner-agent:latest
+    imagePullPolicy: IfNotPresent
+    env:
+      - name: SUBMISSION_ARCHIVE_URL
+        value: ""
+      - name: SUBMISSION_ARCHIVE_SHA256
+        value: ""
+    command: ["/workspace/submission/.venv/bin/python", "/workspace/submission/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    volumeMounts:
+      - name: workspace
+        mountPath: /workspace/submission
+    # Set GPU limits (e.g. nvidia.com/gpu: 1) when the benchmark requires acceleration.
+    resources:
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - NET_ADMIN
+          - NET_RAW
+  volumes:
+  - name: workspace
+    emptyDir: {}

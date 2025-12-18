@@ -1,0 +1,37 @@
+version = "0.1.6"
+log_level = "INFO" # Must be one of TRACE, DEBUG, INFO, WARN, ERROR
+
+wallet_path = "~/.bittensor/wallets"
+wallet_name = "default"
+hotkey_name = "default"
+
+# Database configuration
+pg_database = "postgresql://postgres@localhost/postgres"
+duckdb_path = "evaluation_data.duckdb"  # Path for DuckDB evaluation data storage
+
+# WebSocket Validator Configuration
+# Connection settings for centralized Kinitro Backend
+backend_url = "wss://api.kinitro.ai/ws/validator"  # Backend WebSocket endpoint
+reconnect_interval = 5     # Seconds to wait before reconnecting
+heartbeat_interval = 30    # Seconds between heartbeat messages
+validator_mode = "full"  # "full" for full validator, "lite" for HTTP weight setter
+weights_url = "https://api.kinitro.ai/weights"  # Used by lite mode to fetch weight snapshots
+weights_poll_interval = 30.0   # Seconds between poll attempts in lite mode
+weights_request_timeout = 10.0 # HTTP request timeout for weight fetches
+weights_stale_threshold = 180.0 # Warn if backend weight snapshot is older than this
+
+[subtensor]
+network = "finney"
+address = "wss://entrypoint-finney.opentensor.ai:443"
+netuid = 26
+
+[neuron]
+sync_frequency = 300
+load_old_nodes = true
+allowed_validators = []
+max_commitment_lookback = 360 # Maximum number of recent blocks to scan per sync
+
+[otel]
+api_key = ""
+endpoint = ""
+service_name = ""

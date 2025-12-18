@@ -1,0 +1,27 @@
+# Kinitro Backend Configuration
+
+# Database Configuration
+database_url = "postgresql+asyncpg://postgres@localhost/kinitro_backend"
+
+# WebSocket Server Configuration
+websocket_host = "0.0.0.0"
+websocket_port = 8080
+
+# Chain Monitoring Configuration
+max_commitment_lookback = 360
+chain_sync_interval = 30  # seconds between chain scans
+
+# Validator message worker configuration
+# Set to 0 or omit to use the automatic value (2 * cpu cores + 1)
+# validator_message_workers = 0
+
+[subtensor]
+network = "local"
+address = "ws://127.0.0.1:9944"
+netuid = 2
+
+# Backend Service Configuration
+# [backend]
+# service_version = "1.0.0"
+# max_workers = 10
+# heartbeat_timeout_minutes = 2
